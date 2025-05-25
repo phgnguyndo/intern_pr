@@ -5,6 +5,7 @@ from datetime import date, datetime
 from json import JSONEncoder, dumps
 from pathlib import Path
 from typing import Any
+import json
 
 import coloredlogs
 from verboselogs import VerboseLogger
@@ -22,6 +23,12 @@ class EnhancedJSONEncoder(JSONEncoder):
         if isinstance(obj, set):
             return list(obj)
         return super().default(obj)
+
+def dump_other_files_to_json(logger: VerboseLogger, filename: str, other_files: list[dict]) -> None:
+    """Dump non-text files info to a separate JSON file."""
+    logger.info(f"Dumping non-text files to {filename}")
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump({'files': other_files}, f, indent=2, ensure_ascii=False)
 
 
 def dump_to_file(

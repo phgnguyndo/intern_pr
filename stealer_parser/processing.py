@@ -6,6 +6,7 @@ from re import Match, Pattern, compile
 from py7zr.exceptions import CrcError
 from rarfile import BadRarFile
 from verboselogs import VerboseLogger
+import os
 
 from stealer_parser.models import (
     ArchiveWrapper,
@@ -45,6 +46,9 @@ class LogFileType(Enum):
     SYSTEM = 3
     IP = 4
     COPYRIGHT = 5
+    DOCUMENT = 6
+    PDF = 7
+    JSON = 8
 
 
 @dataclass
@@ -110,26 +114,41 @@ def generate_file_list(root: ArchiveWrapper) -> list[LogFile]:
         Log files grouped by related compromised system.
 
     """
-    files: list[LogFile] = []
+    text_files: list[LogFile] = []
+    other_files: list[dict] = []
+    EXTENSIONS = {'.txt', '.doc', '.docx', '.pdf', '.json'}  # Các đuôi file cần quét
 
     for name in sorted(root.namelist()):
-        matched: Match[str] | None = FILENAMES_PATTERN.search(name)
+        if any(name.lower().endswith(ext) for ext in EXTENSIONS):
+            if name.endswith('.txt'):
+                matched: Match[str] | None = FILENAMES_PATTERN.search(name)
+                if matched:
+                    log_type: LogFileType
+                    if matched.group(2):
+                        log_type = LogFileType.PASSWORDS
+                    elif matched.group(3) and "#" not in name:
+                        log_type = LogFileType.SYSTEM
+                    elif matched.group(4):
+                        log_type = LogFileType.IP
+                    elif matched.group(5):
+                        log_type = LogFileType.COPYRIGHT
+                    else:
+                        continue
+                    text_files.append(LogFile(log_type, name, get_system_dir(name)))
+            else:
+                file_type = (
+                    'document' if name.endswith(('.doc', '.docx')) else
+                    'pdf' if name.endswith('.pdf') else
+                    'json'  # Thêm trường hợp cho .json
+                )
+                other_files.append({
+                    'name': os.path.basename(name),
+                    'path': name,
+                    'filetype': file_type,
+                    'system_dir': get_system_dir(name)
+                })
 
-        if matched:
-            log_type: LogFileType
-
-            if matched.group(2):
-                log_type = LogFileType.PASSWORDS
-            elif matched.group(3) and "#" not in name:
-                log_type = LogFileType.SYSTEM
-            elif matched.group(4):
-                log_type = LogFileType.IP
-            elif matched.group(5):
-                log_type = LogFileType.COPYRIGHT
-
-            files.append(LogFile(log_type, name, get_system_dir(name)))
-
-    return files
+    return text_files, other_files
 
 
 def parse_file(
@@ -254,40 +273,31 @@ def process_system_dir(
 def process_archive(
     logger: VerboseLogger, leak: Leak, archive: ArchiveWrapper
 ) -> None:
-    """Process every system directory in an archive.
-
-    Parameters
-    ----------
-    logger : verboselogs.VerboseLogger
-        The program's logger.
-    leak : stealer_parser.models.leak.Leak
-        The object to store the leak's metadata and content.
-    archive : stealer_parser.models.archive_wrapper.ArchiveWrapper
-        The archive wrapper.
-
-    Raises
-    ------
-    NotImplementedError
-        If the compression method is not supported.
-    rarfile.BadRarFile
-        If failed to read the archive's files.
-
-    """
+    """Process every system directory in an archive."""
     logger.info(f"Processing: {archive.filename} ...")
 
-    files: list[LogFile] = generate_file_list(archive)
+    text_files, other_files = generate_file_list(archive)
     index: int = 0
 
     try:
-        while index < len(files):
-            index += process_system_dir(logger, leak, archive, files[index:])
+        while index < len(text_files):
+            index += process_system_dir(logger, leak, archive, text_files[index:])
+
+        if other_files:
+            from stealer_parser.helpers import dump_other_files_to_json
+            output_dir = "/home/phuong/Desktop/thuc_tap/json_doc"  # Thư mục mới
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            output_filename = os.path.join(
+                output_dir,
+                f"{os.path.splitext(os.path.basename(archive.filename))[0]}_other_files.json"
+            )
+            dump_other_files_to_json(logger, output_filename, other_files)
 
     except BadRarFile as err:
         raise BadRarFile(f"BadRarFile: {err}") from err
-
-    except RuntimeError as err:  # The archive was closed.
+    except RuntimeError as err:
         logger.error(err)
-
     else:
         logger.debug(
             f"Parsed '{leak.filename}' ({len(leak.systems_data)} systems)."
