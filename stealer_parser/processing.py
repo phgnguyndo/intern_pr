@@ -118,6 +118,7 @@ def generate_file_list(root: ArchiveWrapper) -> list[LogFile]:
     other_files: list[dict] = []
     EXTENSIONS = {'.txt', '.doc', '.docx', '.pdf', '.json'}  # Các đuôi file cần quét
 
+
     for name in sorted(root.namelist()):
         if any(name.lower().endswith(ext) for ext in EXTENSIONS):
             if name.endswith('.txt'):
@@ -143,7 +144,7 @@ def generate_file_list(root: ArchiveWrapper) -> list[LogFile]:
                 )
                 other_files.append({
                     'name': os.path.basename(name),
-                    'path': name,
+                    'path': os.path.join(root.filename, name),
                     'filetype': file_type,
                     'system_dir': get_system_dir(name)
                 })
