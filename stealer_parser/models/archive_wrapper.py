@@ -218,3 +218,8 @@ class ArchiveWrapper:
 
         except CrcError as err:
             raise CrcError("Decompression error.") from err
+        
+    def extract_all(self, extract_dir: str) -> None:
+        """Extract all files to the specified directory."""
+        if isinstance(self.root, (RarFile, ZipFile, SevenZipFile)):
+            self.root.extractall(extract_dir)

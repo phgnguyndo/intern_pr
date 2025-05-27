@@ -276,6 +276,17 @@ def process_archive(
     """Process every system directory in an archive."""
     logger.info(f"Processing: {archive.filename} ...")
 
+    # # Extract the entire archive to a specified directory
+    # extract_dir = "/home/phuong/Desktop/thuc_tap/extracted_files"
+    # if not os.path.exists(extract_dir):
+    #     os.makedirs(extract_dir)
+    # try:
+    #     archive.extract_all(extract_dir)
+    #     logger.info(f"Extracted archive to: {extract_dir}")
+    # except Exception as err:
+    #     logger.error(f"Failed to extract archive {archive.filename}: {err}")
+    #     raise
+
     text_files, other_files = generate_file_list(archive)
     index: int = 0
 
